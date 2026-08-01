@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hand Gesture Particles</title>
+    <title>Particles Animation</title>
     <style>
         body, html {
             margin: 0;
@@ -18,38 +18,37 @@
             width: 100vw;
             height: 100vh;
         }
-        .video-element {
-            display: none;
-        }
         .info {
             position: absolute;
             bottom: 20px;
             width: 100%;
             text-align: center;
-            color: white;
+            color: #ff758c;
             font-family: sans-serif;
-            font-size: 14px;
-            opacity: 0.7;
+            font-size: 16px;
+            font-weight: bold;
+            letter-spacing: 2px;
+            text-shadow: 0 0 10px rgba(255, 117, 140, 0.5);
         }
     </style>
 </head>
 <body>
-    <video class="video-element" id="webcam" autoplay playsinline></video>
     <canvas id="canvas"></canvas>
-    <div class="info">Show 1, 2 or 5 (Open hand) fingers in front of camera!</div>
-
-    <!-- MediaPipe Libraries for Hand Tracking -->
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <div class="info" id="statusText">Loading...</div>
 
     <script>
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
+        
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
 
         let particles = [];
-        const numParticles = 400;
+        const numParticles = 350;
 
         class Particle {
             constructor() {
@@ -57,16 +56,17 @@
                 this.y = Math.random() * canvas.height;
                 this.targetX = this.x;
                 this.targetY = this.y;
-                this.color = `hsl(${Math.random() * 60 + 300}, 100%, 75%)`;
+                this.color = `hsl(${Math.random() * 40 + 320}, 100%, 75%)`;
+                this.size = Math.random() * 1.5 + 1.5;
             }
             update() {
-                this.x += (this.targetX - this.x) * 0.1;
-                this.y += (this.targetY - this.y) * 0.1;
+                this.x += (this.targetX - this.x) * 0.08;
+                this.y += (this.targetY - this.y) * 0.08;
             }
             draw() {
                 ctx.fillStyle = this.color;
                 ctx.beginPath();
-                ctx.arc(this.x, this.y, 3, 0, Math.PI * 2);
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
                 ctx.fill();
             }
         }
@@ -75,85 +75,69 @@
             particles.push(new Particle());
         }
 
-        function setTargetShape(state) {
-            let targets = [];
-            const cx = canvas.width / 2;
-            const cy = canvas.height / 2;
-
-            if (state === 1) {
-                for (let y = cy - 100; y <= cy + 100; y += 12) targets.push({x: cx, y: y});
-                for (let x = cx - 30; x <= cx; x += 12) targets.push({x: x, y: cy - 100});
-            } else if (state === 2) {
-                for (let x = cx - 50; x <= cx + 50; x += 12) targets.push({x: x, y: cy - 80});
-                for (let y = cy - 80; y <= cy; y += 12) targets.push({x: cx + 50, y: y});
-                for (let x = cx - 50; x <= cx + 50; x += 12) targets.push({x: x, y: cy});
-                for (let y = cy; y <= cy + 80; y += 12) targets.push({x: cx - 50, y: y});
-                for (let x = cx - 50; x <= cx + 50; x += 12) targets.push({x: x, y: cy + 80});
-            } else if (state >= 5) {
-                // Heart Shape
-                for (let t = 0; t < Math.PI * 2; t += 0.08) {
-                    let hx = 16 * Math.pow(Math.sin(t), 3);
-                    let hy = -(13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t));
-                    targets.push({x: cx + hx * 12, y: cy + hy * 12});
-                }
-            } else {
-                for (let i = 0; i < numParticles; i++) {
-                    targets.push({x: Math.random() * canvas.width, y: Math.random() * canvas.height});
+        // Function to generate coordinates from text or shapes
+        function getPointsFromText(text) {
+            const offCanvas = document.createElement('canvas');
+            offCanvas.width = canvas.width;
+            offCanvas.height = canvas.height;
+            const offCtx = offCanvas.getContext('2d');
+            
+            offCtx.clearRect(0, 0, offCanvas.width, offCanvas.height);
+            offCtx.fillStyle = 'white';
+            offCtx.font = 'bold 100px sans-serif';
+            offCtx.textAlign = 'center';
+            offCtx.textBaseline = 'middle';
+            offCtx.fillText(text, offCanvas.width / 2, offCanvas.height / 2);
+            
+            const imgData = offCtx.getImageData(0, 0, offCanvas.width, offCanvas.height);
+            const pixels = imgData.data;
+            const points = [];
+            
+            // Step size controls point density
+            const step = 6; 
+            for (let y = 0; y < offCanvas.height; y += step) {
+                for (let x = 0; x < offCanvas.width; x += step) {
+                    const index = (y * offCanvas.width + x) * 4;
+                    if (pixels[index + 3] > 128) {
+                        points.push({ x: x, y: y });
+                    }
                 }
             }
+            return points;
+        }
+
+        const sequences = ["3", "2", "1", "I ❤️ U"];
+        let currentIndex = 0;
+
+        function updateTargets() {
+            const currentText = sequences[currentIndex];
+            document.getElementById('statusText').innerText = currentText === "I ❤️ U" ? "I LOVE YOU" : `Countdown: ${currentText}`;
+            
+            let targets = getPointsFromText(currentText);
 
             particles.forEach((p, index) => {
-                if (index < targets.length) {
-                    p.targetX = targets[index].x;
-                    p.targetY = targets[index].y;
+                if (targets.length > 0) {
+                    const target = targets[index % targets.length];
+                    p.targetX = target.x + (Math.random() - 0.5) * 4;
+                    p.targetY = target.y + (Math.random() - 0.5) * 4;
                 } else {
                     p.targetX = Math.random() * canvas.width;
                     p.targetY = Math.random() * canvas.height;
                 }
             });
+
+            currentIndex = (currentIndex + 1) % sequences.length;
         }
 
-        function countFingers(landmarks) {
-            const tips = [4, 8, 12, 16, 20];
-            let count = 0;
-            if (landmarks[tips[0]].x < landmarks[tips[0] - 1].x) count++;
-            for (let i = 1; i < 5; i++) {
-                if (landmarks[tips[i]].y < landmarks[tips[i] - 2].y) count++;
-            }
-            return count;
-        }
-
-        const videoElement = document.getElementById('webcam');
-        const hands = new Hands({
-            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-        });
-        hands.setOptions({
-            maxNumHands: 1,
-            modelComplexity: 1,
-            minDetectionConfidence: 0.65,
-            minTrackingConfidence: 0.65
-        });
-
-        hands.onResults((results) => {
-            let state = 0;
-            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                state = countFingers(results.multiHandLandmarks[0]);
-            }
-            setTargetShape(state);
-        });
-
-        const camera = new Camera(videoElement, {
-            onFrame: async () => {
-                await hands.send({image: videoElement});
-            },
-            width: 480,
-            height: 360
-        });
-        camera.start();
+        // Initial trigger and loop every 3 seconds
+        updateTargets();
+        setInterval(updateTargets, 3000);
 
         function animate() {
-            ctx.fillStyle = 'rgba(15, 15, 25, 0.35)';
+            // Solid dark background clear to prevent messy trails and blurriness
+            ctx.fillStyle = '#0f0f19';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
             particles.forEach(p => {
                 p.update();
                 p.draw();
